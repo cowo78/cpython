@@ -1422,7 +1422,11 @@ pysleep(_PyTime_t secs)
 {
     _PyTime_t deadline, monotonic;
 #ifndef MS_WINDOWS
+#   if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L
+    struct timespec timeout;
+#   else
     struct timeval timeout;
+#   endif /* _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L */
     int err = 0;
 #else
     _PyTime_t millisecs;
@@ -1435,11 +1439,20 @@ pysleep(_PyTime_t secs)
 
     do {
 #ifndef MS_WINDOWS
+
+#   if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L
+        if (_PyTime_AsTimespec(secs, &timeout) < 0)
+            return -1;
+
+        Py_BEGIN_ALLOW_THREADS
+        err = clock_nanosleep(CLOCK_MONOTONIC, 0, &timeout, NULL);
+#   else
         if (_PyTime_AsTimeval(secs, &timeout, _PyTime_ROUND_CEILING) < 0)
             return -1;
 
         Py_BEGIN_ALLOW_THREADS
         err = select(0, (fd_set *)0, (fd_set *)0, (fd_set *)0, &timeout);
+#   endif  /* if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L */
         Py_END_ALLOW_THREADS
 
         if (err == 0)
